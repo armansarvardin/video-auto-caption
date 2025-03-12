@@ -1,0 +1,5 @@
+opencv-python-headless
+openai
+moviepy
+imageio[ffmpeg]
+pillow
