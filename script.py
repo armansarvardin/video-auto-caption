@@ -8,7 +8,6 @@ import glob
 from dotenv import load_dotenv
 from pathlib import Path
 
-# Load environment variables from .env file (for API keys)
 load_dotenv()
 
 
@@ -87,12 +86,13 @@ def encode_image(image_path):
         return base64.b64encode(image_file.read()).decode('utf-8')
 
 
-def get_caption_from_openai(image_paths):
+def get_caption_from_openai(image_paths, context):
     """
     Get caption from OpenAI API using extracted frames
 
     Args:
         image_paths (list): List of paths to image files
+        context: shares the context of the dataset with the ChatGPT prompt
 
     Returns:
         str: Generated caption
@@ -105,7 +105,7 @@ def get_caption_from_openai(image_paths):
     content = [
         {
             "type": "text",
-            "text": "Write a short caption of video containing 2-3 sentences according to the provided video."
+            "text": f"Write a short caption of video containing 3-4 short sentences according to the provided video. Provide only caption. Video context: {context} dataset video"
         }
     ]
 
@@ -147,7 +147,7 @@ def get_caption_from_openai(image_paths):
     return response_data['choices'][0]['message']['content']
 
 
-def process_video(video_path, output_dir, num_frames=10):
+def process_video(video_path, output_dir, context, num_frames=10):
     """
     Process a single video to extract frames and get caption
 
@@ -171,12 +171,12 @@ def process_video(video_path, output_dir, num_frames=10):
         print(f"Extracted {len(frames)} frames")
 
         # Save frames as images
-        image_paths = save_frames(frames, frames_dir)
+        image_paths = sorted(save_frames(frames, frames_dir))
         print(f"Saved frames to {frames_dir}")
 
         # Get caption from OpenAI API
         print("Getting caption from OpenAI API...")
-        caption = get_caption_from_openai(image_paths)
+        caption = get_caption_from_openai(image_paths, context)
 
         # Save caption to file
         caption_path = os.path.join(video_output_dir, "caption.txt")
@@ -209,17 +209,18 @@ def find_mp4_files(directory="."):
     return glob.glob(mp4_pattern)
 
 
-def save_results_to_csv(results, output_path):
+def save_results_to_csv(results, output_path, context):
     """
     Save results to CSV file
 
     Args:
         results (dict): Dictionary mapping video paths to captions
         output_path (str): Path to save CSV file
+        context(str): Context of the video is written it the end of the file
     """
     with open(output_path, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow(['video_path', 'caption'])
+        writer.writerow(['content_path', 'caption'])
         for video_path, caption in results.items():
             writer.writerow([video_path, caption])
 
@@ -230,8 +231,9 @@ def main():
 
     parser = argparse.ArgumentParser(description="Process all MP4 files in current directory and generate captions")
     parser.add_argument("--output", default="output", help="Directory to save frames and captions")
-    parser.add_argument("--frames", type=int, default=10, help="Number of frames to extract per video")
+    parser.add_argument("--frames", type=int, default=15, help="Number of frames to extract per video")
     parser.add_argument("--csv", default="captions.csv", help="Output CSV file name")
+    parser.add_argument("--context", default="Running fast", help="Context for the video")
 
     args = parser.parse_args()
 
@@ -248,12 +250,12 @@ def main():
     results = {}
     for video_path in mp4_files:
         print(f"\nProcessing {video_path}...")
-        caption = process_video(video_path, args.output, args.frames)
+        caption = process_video(video_path, args.output, args.context, args.frames)
         results[video_path] = caption
 
     # Save results to CSV
     csv_path = args.csv
-    save_results_to_csv(results, csv_path)
+    save_results_to_csv(results, csv_path, args.context)
     print(f"\nResults saved to {csv_path}")
 
 
